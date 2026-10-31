@@ -1,9 +1,16 @@
 {
+  "backend": "astrbot",
+
+  "astrbot_url": "http://127.0.0.1:6185",
+  "astrbot_api_key": "在這裡貼上 AstrBot 的 API Key（要有 chat 權限）",
+  "astrbot_username": "achuu",
+
   "api_key": "在這裡貼上你的 DeepSeek API key",
   "api_base": "https://api.deepseek.com/v1",
   "model": "deepseek-flash",
   "temperature": 1.1,
   "max_history": 30,
+
   "port": 8848,
   "password": "自己取一個密碼",
   "mock": false

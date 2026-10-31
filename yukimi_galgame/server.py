@@ -5,10 +5,12 @@
 只用 Python 內建模組，不用另外安裝套件。
 """
 import json
+import re
 import socket
 import sys
 import urllib.error
 import urllib.request
+import uuid
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -36,12 +38,125 @@ def load_config():
     cfg.setdefault("port", 8848)
     cfg.setdefault("password", "")
     cfg.setdefault("mock", False)
+    # backend：deepseek＝網頁自己問 DeepSeek；astrbot＝透過 AstrBot（共用人設、記憶、插件）
+    cfg.setdefault("backend", "deepseek")
+    cfg.setdefault("astrbot_url", "http://127.0.0.1:6185")
+    cfg.setdefault("astrbot_api_key", "")
+    cfg.setdefault("astrbot_username", "achuu")
     return cfg
 
 
 CFG = load_config()
 PERSONA = (ROOT / "persona.txt").read_text(encoding="utf-8").strip()
 PRESETS = json.loads((ROOT / "presets.json").read_text(encoding="utf-8"))
+SESSION_FILE = ROOT / "astrbot_session.txt"
+TAG_RE = re.compile(r"[【\[](" + "|".join(EMOTIONS) + r")[】\]]")
+
+
+def has_deepseek_key():
+    key = str(CFG.get("api_key", ""))
+    return bool(key) and not key.startswith("在這裡")
+
+
+# ---------- AstrBot 模式 ----------
+def astrbot_session_id():
+    """網頁固定用同一個 AstrBot 對話視窗，第一次自動建立。"""
+    if SESSION_FILE.exists():
+        return SESSION_FILE.read_text(encoding="utf-8").strip()
+    sid = "yukimi-galgame-" + uuid.uuid4().hex[:12]
+    SESSION_FILE.write_text(sid, encoding="utf-8")
+    return sid
+
+
+def ask_astrbot(message):
+    body = json.dumps({
+        "message": message,
+        "session_id": astrbot_session_id(),
+        "username": CFG["astrbot_username"],
+        "enable_streaming": False,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        CFG["astrbot_url"].rstrip("/") + "/api/v1/chat",
+        data=body,
+        headers={"Content-Type": "application/json", "X-API-Key": CFG["astrbot_api_key"]},
+    )
+    parts = []
+    with urllib.request.urlopen(req, timeout=180) as resp:
+        if "json" in resp.headers.get("Content-Type", ""):   # AstrBot 回錯誤時是 JSON
+            data = json.loads(resp.read().decode("utf-8"))
+            raise RuntimeError(data.get("message") or data.get("data") or str(data))
+        for raw in resp:                                      # 其餘是 SSE：data: {...}
+            line = raw.decode("utf-8", "ignore").strip()
+            if not line.startswith("data:"):
+                continue
+            try:
+                ev = json.loads(line[5:].strip())
+            except json.JSONDecodeError:
+                continue
+            kind = ev.get("type")
+            if kind == "plain" and ev.get("chain_type") not in ("tool_call", "tool_call_result", "reasoning"):
+                if isinstance(ev.get("data"), str) and ev["data"].strip():
+                    parts.append(ev["data"])
+            elif kind == "error":
+                raise RuntimeError(f"AstrBot 回覆失敗：{ev.get('data')}")
+            elif kind == "end":
+                break
+    text = "\n".join(parts).strip()
+    if not text:
+        raise RuntimeError("AstrBot 沒有回覆內容")
+    return text
+
+
+KEYWORDS = [
+    ("生氣", ["哼！", "哼，", "生氣", "討厭", "不理你", "壞孩子", "欺負"]),
+    ("害羞", ["害羞", "臉紅", "不好意思", "討厭啦", "///", "才沒有"]),
+    ("難過", ["難過", "心疼", "嗚", "捨不得"]),
+    ("驚訝", ["欸？", "什麼？", "真的假的", "蛤", "！？", "?!"]),
+    ("睏", ["睏", "想睡", "呵欠", "晚安", "好累"]),
+    ("壞笑", ["嘿嘿", "哦——", "被我抓到", "你該不會", "壞壞"]),
+    ("拋媚眼", ["♡", "❤", "親一下", "喜歡你"]),
+    ("開心", ["XD", "笑死", "哈哈", "好耶", "太好了", "～", "開心"]),
+]
+
+
+def guess_emotion(text):
+    if has_deepseek_key() and not CFG["mock"]:
+        try:
+            body = json.dumps({
+                "model": CFG["model"],
+                "temperature": 0,
+                "max_tokens": 8,
+                "messages": [
+                    {"role": "system", "content": "你是表情判斷器。看這句台詞，從清單選一個最符合說話者表情的詞，只回那個詞：" + "、".join(EMOTIONS)},
+                    {"role": "user", "content": text[:500]},
+                ],
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                CFG["api_base"].rstrip("/") + "/chat/completions", data=body,
+                headers={"Content-Type": "application/json", "Authorization": "Bearer " + CFG["api_key"]},
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                ans = json.loads(resp.read().decode("utf-8"))["choices"][0]["message"]["content"]
+            for e in EMOTIONS:
+                if e in ans:
+                    return e
+        except Exception:
+            pass  # 判斷失敗就用關鍵字
+    for emo, words in KEYWORDS:
+        if any(w in text for w in words):
+            return emo
+    return "平常"
+
+
+def reply_via_astrbot(history):
+    last = next((m["content"] for m in reversed(history) if m.get("role") == "user"), "")
+    if CFG["mock"]:
+        text = f"（AstrBot 模式測試）姐姐收到囉～你說「{last[:20]}」XD"
+    else:
+        text = ask_astrbot(last)
+    m = TAG_RE.search(text)
+    emo = m.group(1) if m else guess_emotion(text)
+    return f"【{emo}】" + TAG_RE.sub("", text).strip()
 
 
 def build_messages(history):
@@ -106,13 +221,15 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(400, {"error": "格式錯誤"})
         if CFG["password"] and req.get("password") != CFG["password"]:
             return self.send_json(401, {"error": "密碼錯誤"})
+        via = "AstrBot" if CFG["backend"] == "astrbot" else "DeepSeek"
         try:
-            reply = ask_llm(req.get("history", []))
+            history = req.get("history", [])
+            reply = reply_via_astrbot(history) if CFG["backend"] == "astrbot" else ask_llm(history)
         except urllib.error.HTTPError as e:
             detail = e.read().decode("utf-8", "ignore")[:300]
-            return self.send_json(502, {"error": f"DeepSeek 回傳錯誤 {e.code}：{detail}"})
+            return self.send_json(502, {"error": f"{via} 回傳錯誤 {e.code}：{detail}"})
         except Exception as e:
-            return self.send_json(502, {"error": f"連不上 DeepSeek：{e}"})
+            return self.send_json(502, {"error": f"{via} 出問題了：{e}"})
         self.send_json(200, {"reply": reply})
 
 
@@ -130,6 +247,14 @@ def lan_ip():
 if __name__ == "__main__":
     if not (WEB / "sprites" / "manifest.json").exists():
         print("⚠ 找不到立繪：請把 yukimi_sprites 壓縮檔裡的東西放進 web/sprites/（裡面要有 manifest.json）")
+    if CFG["backend"] == "astrbot":
+        print(f"模式：透過 AstrBot（{CFG['astrbot_url']}），人設和記憶跟 Telegram 共用")
+        if not CFG["astrbot_api_key"]:
+            print("⚠ 還沒填 astrbot_api_key：請在 AstrBot 管理網頁建立一把有 chat 權限的 API Key")
+        if not has_deepseek_key():
+            print("  （沒填 DeepSeek api_key：表情會用關鍵字判斷，準確度差一點）")
+    else:
+        print("模式：直接連 DeepSeek（不會用到 AstrBot 的記憶）")
     if not CFG["password"]:
         print("⚠ 沒有設定密碼：同一個 WiFi 的人都能用你的 DeepSeek 額度，建議在 config.json 填 password")
     port = CFG["port"]
