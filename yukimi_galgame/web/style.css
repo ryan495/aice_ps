@@ -81,6 +81,9 @@ button { font: inherit; cursor: pointer; }
 .panel > button.danger { background: #c9576a; color: #fff; }
 .hint { font-size: 13px; opacity: .75; }
 
+@media (max-aspect-ratio: 3/4) {
+  #sprite-wrap { top: calc(56px + env(safe-area-inset-top)); }
+}
 @media (min-aspect-ratio: 4/3) {
   #sprite-wrap { height: 150vh; }
 }
