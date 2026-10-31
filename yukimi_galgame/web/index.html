@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2b2230">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>雪見</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div>
+  <div id="sprite-wrap"><img id="sprite" alt="雪見"></div>
+
+  <div id="topbar">
+    <button id="btn-outfit" title="換衣服">👗</button>
+    <button id="btn-log" title="對話紀錄">📜</button>
+    <button id="btn-settings" title="設定">⚙️</button>
+  </div>
+
+  <div id="dialog">
+    <div id="nameplate">雪見</div>
+    <div id="text" aria-live="polite"></div>
+    <form id="input-row">
+      <textarea id="input" rows="1" placeholder="跟雪見說點什麼……" enterkeyhint="send"></textarea>
+      <button id="send" type="submit">送出</button>
+    </form>
+  </div>
+
+  <div id="panel-outfit" class="panel hidden">
+    <div class="panel-head">換衣服<button class="close">✕</button></div>
+    <div id="outfit-list"></div>
+  </div>
+
+  <div id="panel-log" class="panel hidden">
+    <div class="panel-head">對話紀錄<button class="close">✕</button></div>
+    <div id="log-list"></div>
+  </div>
+
+  <div id="panel-settings" class="panel hidden">
+    <div class="panel-head">設定<button class="close">✕</button></div>
+    <label>密碼（config.json 裡的 password）
+      <input id="password" type="password" autocomplete="current-password">
+    </label>
+    <button id="btn-save-pw">儲存密碼</button>
+    <button id="btn-clear" class="danger">清除對話紀錄</button>
+    <p class="hint">對話紀錄只存在這支手機（或這台電腦）的瀏覽器裡。</p>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
