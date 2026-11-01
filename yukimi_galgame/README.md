@@ -16,7 +16,7 @@
    yukimi_galgame/web/sprites/home_apron/neutral.webp
    ……
    ```
-3. **填設定**：把 `config.example.json` 複製一份，改名成 `config.json`，用記事本打開。先選模式：
+3. **填設定**：第一次雙擊 `start.bat` 時，程式會自動建立 `config.json` 並用記事本打開，填好存檔後再執行一次 `start.bat`。（也可以自己把 `config.example.json` 複製一份改名成 `config.json`；Windows 預設會隱藏副檔名，小心不要變成 `config.json.json`。）先選模式：
 
    | `backend` | 說明 |
    |---|---|

@@ -29,7 +29,15 @@ EMOTION_RULE = (
 
 def load_config():
     if not CONFIG_PATH.exists():
-        sys.exit("找不到 config.json：請把 config.example.json 複製一份改名成 config.json，再填入你的 DeepSeek API key。")
+        # 第一次啟動：自動從範本建立 config.json，並用記事本打開讓你填
+        CONFIG_PATH.write_text((ROOT / "config.example.json").read_text(encoding="utf-8"), encoding="utf-8")
+        print("已經幫你建立 config.json，請在打開的記事本裡填好 Key 和密碼，存檔後再重新執行 start.bat。")
+        try:
+            import os
+            os.startfile(str(CONFIG_PATH))  # 只有 Windows 有
+        except Exception:
+            print(f"設定檔在：{CONFIG_PATH}")
+        sys.exit(0)
     cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     cfg.setdefault("api_base", "https://api.deepseek.com/v1")
     cfg.setdefault("model", "deepseek-flash")
@@ -249,12 +257,14 @@ if __name__ == "__main__":
         print("⚠ 找不到立繪：請把 yukimi_sprites 壓縮檔裡的東西放進 web/sprites/（裡面要有 manifest.json）")
     if CFG["backend"] == "astrbot":
         print(f"模式：透過 AstrBot（{CFG['astrbot_url']}），人設和記憶跟 Telegram 共用")
-        if not CFG["astrbot_api_key"]:
+        if not CFG["astrbot_api_key"] or CFG["astrbot_api_key"].startswith("在這裡"):
             print("⚠ 還沒填 astrbot_api_key：請在 AstrBot 管理網頁建立一把有 chat 權限的 API Key")
         if not has_deepseek_key():
             print("  （沒填 DeepSeek api_key：表情會用關鍵字判斷，準確度差一點）")
     else:
         print("模式：直接連 DeepSeek（不會用到 AstrBot 的記憶）")
+    if CFG["password"] == "自己取一個密碼":
+        print("⚠ 密碼還是範本裡的「自己取一個密碼」，建議改成你自己的")
     if not CFG["password"]:
         print("⚠ 沒有設定密碼：同一個 WiFi 的人都能用你的 DeepSeek 額度，建議在 config.json 填 password")
     port = CFG["port"]
