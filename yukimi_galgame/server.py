@@ -58,6 +58,7 @@ CFG = load_config()
 PERSONA = (ROOT / "persona.txt").read_text(encoding="utf-8").strip()
 PRESETS = json.loads((ROOT / "presets.json").read_text(encoding="utf-8"))
 SESSION_FILE = ROOT / "astrbot_session.txt"
+THINK_RE = re.compile(r"🤔\s*思考[:：].*?(?:\n\s*─{2,}\s*\n|$)", re.S)  # 萬一還是有思考內容就刪掉
 TAG_RE = re.compile(r"[【\[](" + "|".join(EMOTIONS) + r")[】\]]")
 
 
@@ -82,6 +83,8 @@ def ask_astrbot(message):
         "session_id": astrbot_session_id(),
         "username": CFG["astrbot_username"],
         "enable_streaming": False,
+        # AstrBot 的網頁聊天預設會把「🤔 思考: …」一起送出來，這裡關掉
+        "flags": {"enable_reasoning": False, "enable_inline_genui": False, "enable_streaming": False},
     }).encode("utf-8")
     req = urllib.request.Request(
         CFG["astrbot_url"].rstrip("/") + "/api/v1/chat",
@@ -109,7 +112,7 @@ def ask_astrbot(message):
                 raise RuntimeError(f"AstrBot 回覆失敗：{ev.get('data')}")
             elif kind == "end":
                 break
-    text = "\n".join(parts).strip()
+    text = THINK_RE.sub("", "\n".join(parts)).strip()
     if not text:
         raise RuntimeError("AstrBot 沒有回覆內容")
     return text
