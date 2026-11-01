@@ -252,6 +252,20 @@ def lan_ip():
         return "你的電腦IP"
 
 
+def tailscale_ips():
+    """找出 Tailscale 的位址（100.64.0.0/10 這一段）。"""
+    found = set()
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            a, b = (int(x) for x in ip.split(".")[:2])
+            if a == 100 and 64 <= b <= 127:
+                found.add(ip)
+    except (OSError, ValueError):
+        pass
+    return sorted(found)
+
+
 if __name__ == "__main__":
     if not (WEB / "sprites" / "manifest.json").exists():
         print("⚠ 找不到立繪：請把 yukimi_sprites 壓縮檔裡的東西放進 web/sprites/（裡面要有 manifest.json）")
@@ -272,6 +286,8 @@ if __name__ == "__main__":
     print(f"雪見已經起床了～")
     print(f"  電腦打開： http://localhost:{port}")
     print(f"  手機打開： http://{lan_ip()}:{port}  （手機要連同一個 WiFi）")
+    for ip in tailscale_ips():
+        print(f"  Tailscale： http://{ip}:{port}  （手機開著 Tailscale，在外面也能連）")
     print("  關掉這個視窗就會停止。")
     try:
         server.serve_forever()
