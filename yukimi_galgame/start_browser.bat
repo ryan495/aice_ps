@@ -6,6 +6,8 @@ if not %errorlevel%==0 (
   goto done
 )
 echo Starting browser tool on http://localhost:8931/mcp ...
-npx -y @playwright/mcp@0.0.84 --port 8931 --browser msedge --user-data-dir C:\yukimi-browser --image-responses omit
+call npx -y @playwright/mcp@0.0.84 --port 8931 --browser msedge --user-data-dir C:\yukimi-browser --image-responses omit
+echo.
+echo The browser tool stopped. If there is an error above, take a screenshot.
 :done
 pause
